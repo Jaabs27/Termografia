@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inspeção termográfica — comparação entre módulos</title>
+<style>
+:root {
+  --fundo: #eef1f4; --papel: #ffffff; --tinta: #16202a; --aco: #566474; --linha: #d2d9e1;
+  --campo: #f6f8fa; --alerta: #c3261d; --alerta-bg: #fdecea; --ok: #1d7436; --ok-bg: #e8f4ec;
+  --atencao: #9a5b00; --atencao-bg: #fdf3e2; --foco: #2563c9;
+  --termico: linear-gradient(90deg, #000004, #420a68, #932667, #dd513a, #fca50a, #fcffa4);
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fundo: #12171d; --papel: #1a2129; --tinta: #e6ebf0; --aco: #9aa8b7; --linha: #2e3843;
+    --campo: #222b35; --alerta: #ff6b5e; --alerta-bg: #3a1b19; --ok: #5fcf83; --ok-bg: #16301f;
+    --atencao: #f0b45a; --atencao-bg: #3a2a12; --foco: #7aa7ff; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --fundo: #12171d; --papel: #1a2129; --tinta: #e6ebf0; --aco: #9aa8b7; --linha: #2e3843;
+  --campo: #222b35; --alerta: #ff6b5e; --alerta-bg: #3a1b19; --ok: #5fcf83; --ok-bg: #16301f;
+  --atencao: #f0b45a; --atencao-bg: #3a2a12; --foco: #7aa7ff; color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: inherit; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  margin: 0; background: var(--fundo); color: var(--tinta);
+  font: 15px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+
+header.topo { background: var(--papel); border-bottom: 1px solid var(--linha); }
+header.topo::after { content: ""; display: block; height: 4px; background: var(--termico); }
+.faixa { max-width: 1180px; margin: 0 auto; padding: 18px 24px; }
+.cabecalho { display: flex; flex-wrap: wrap; gap: 18px 32px; align-items: flex-end; justify-content: space-between; }
+h1 { font-size: 1.55rem; line-height: 1.2; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+.sub { color: var(--aco); margin: 4px 0 0; font-size: 0.92rem; max-width: 60ch; }
+.campos { display: flex; flex-wrap: wrap; gap: 12px; }
+.campos label { display: grid; gap: 3px; font-size: 0.8rem; color: var(--aco); }
+.campos input { background: var(--campo); border: 1px solid var(--linha); border-radius: 6px; padding: 7px 10px; min-width: 0; }
+.campos .limite input { width: 110px; text-align: right; font-weight: 600; }
+.campos .texto input { width: 210px; }
+
+main { max-width: 1180px; margin: 0 auto; padding: 24px; }
+
+.soltar {
+  display: grid; place-items: center; text-align: center; gap: 10px;
+  min-height: 260px; padding: 32px; border: 2px dashed var(--linha); border-radius: 12px;
+  background: var(--papel); cursor: pointer; transition: border-color .15s, background .15s;
+}
+.soltar.ativo { border-color: var(--foco); background: var(--campo); }
+.soltar strong { font-size: 1.15rem; }
+.soltar p { margin: 0; color: var(--aco); max-width: 52ch; }
+.botao {
+  display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--linha); background: var(--papel);
+  border-radius: 8px; padding: 8px 14px; cursor: pointer; font-weight: 600;
+}
+.botao.principal { background: var(--tinta); color: var(--papel); border-color: var(--tinta); }
+.botao:hover { filter: brightness(1.06); }
+
+.progresso { margin: 18px 0 0; color: var(--aco); }
+.barra { height: 6px; border-radius: 3px; background: var(--linha); overflow: hidden; margin-top: 6px; }
+.barra span { display: block; height: 100%; width: 0; background: var(--termico); transition: width .2s; }
+
+.acoes { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
+.acoes .resumo-texto { margin-right: auto; font-size: 1.02rem; }
+.acoes .resumo-texto b.al { color: var(--alerta); }
+.acoes .resumo-texto b.at { color: var(--atencao); }
+
+.tabela-rolagem { overflow-x: auto; background: var(--papel); border: 1px solid var(--linha); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+th { font-weight: 600; color: var(--aco); font-size: 0.82rem; background: var(--campo); }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; }
+.resumo tbody tr { cursor: pointer; }
+.resumo tbody tr:hover td { background: var(--campo); }
+
+.selo { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; }
+.selo.ok { color: var(--ok); background: var(--ok-bg); }
+.selo.alerta { color: var(--alerta); background: var(--alerta-bg); }
+.selo.revisar { color: var(--atencao); background: var(--atencao-bg); }
+.selo.erro { color: var(--aco); background: var(--campo); }
+
+.imagem { margin-top: 28px; background: var(--papel); border: 1px solid var(--linha); border-radius: 12px; overflow: hidden; }
+.imagem.alerta { border-color: var(--alerta); box-shadow: inset 4px 0 0 var(--alerta); }
+.imagem.revisar { box-shadow: inset 4px 0 0 var(--atencao); }
+.imagem > h2 { margin: 0; padding: 14px 20px; font-size: 1.05rem; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; border-bottom: 1px solid var(--linha); }
+.imagem > h2 .meta { color: var(--aco); font-weight: 400; font-size: 0.85rem; }
+.corpo { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 20px; padding: 20px; }
+@media (max-width: 860px) { .corpo { grid-template-columns: 1fr; } }
+.termo { position: relative; }
+.termo canvas { width: 100%; height: auto; display: block; border-radius: 6px; background: #000; image-rendering: auto; }
+.escala { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--aco); margin-top: 6px; }
+.escala i { flex: 1; height: 8px; border-radius: 4px; background: var(--termico); }
+.leitura { position: absolute; pointer-events: none; background: rgba(0,0,0,.78); color: #fff; font-size: 0.78rem; padding: 2px 6px; border-radius: 4px; transform: translate(10px, -130%); display: none; white-space: nowrap; }
+.lado { display: grid; gap: 14px; align-content: start; }
+.lado label { display: grid; gap: 3px; font-size: 0.8rem; color: var(--aco); }
+.lado label input { background: var(--campo); border: 1px solid var(--linha); border-radius: 6px; padding: 7px 10px; font-size: 0.95rem; color: var(--tinta); }
+.lado table { border: 1px solid var(--linha); border-radius: 8px; border-collapse: separate; border-spacing: 0; overflow: hidden; }
+.veredito { padding: 10px 12px; border-radius: 8px; font-size: 0.92rem; }
+.veredito.ok { background: var(--ok-bg); color: var(--ok); }
+.veredito.alerta { background: var(--alerta-bg); color: var(--alerta); }
+.veredito.revisar { background: var(--atencao-bg); color: var(--atencao); }
+.parametros { font-size: 0.8rem; color: var(--aco); margin: 0; }
+.vermelho { color: var(--alerta); font-weight: 700; }
+.titulo-secao { font-size: 1.1rem; margin: 28px 0 2px; }
+#bloco-grupos .sub { margin-bottom: 10px; }
+.falhas { margin: 0 0 18px; border-color: var(--atencao) !important; background: var(--papel); border: 1px solid var(--linha); border-radius: 10px; padding: 14px 18px; }
+.falhas h2 { font-size: 1rem; margin: 0 0 6px; }
+.falhas ul { margin: 0; padding-left: 18px; color: var(--aco); }
+.so-impressao { display: none; }
+.rodape { color: var(--aco); font-size: 0.8rem; margin-top: 32px; }
+[hidden] { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+@media print {
+  :root { --fundo: #fff; --papel: #fff; --tinta: #000; --aco: #444; --linha: #bbb; --campo: #f1f1f1; color-scheme: light; padding: 0; }
+  @page { size: A4; margin: 12mm; }
+  body { font-size: 11px; background: #fff; }
+  .nao-imprimir, .soltar, .acoes, .progresso, .leitura { display: none !important; }
+  .so-impressao { display: block; }
+  header.topo { border: 0; }
+  .faixa, main { padding: 0; max-width: none; }
+  .campos input { border: 0; background: none; padding: 0; font-weight: 600; }
+  .campos .limite input { width: auto; text-align: left; }
+  .imagem { break-before: page; border: 1px solid #999; box-shadow: none !important; margin-top: 0; }
+  .imagem.alerta { border: 2px solid var(--alerta); }
+  .corpo { grid-template-columns: 1.3fr 1fr; padding: 10px; gap: 12px; }
+  .lado label input { border: 0; background: none; padding: 0; font-weight: 600; }
+  .tabela-rolagem { overflow: visible; }
+  th, td { padding: 4px 6px; white-space: normal; }
+  td.num, th.num { white-space: nowrap; }
+  .corpo { grid-template-columns: 1.15fr 1fr; }
+  input { outline: none !important; border: 0 !important; background: none !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+</head>
+<body>
+<header class="topo">
+  <div class="faixa cabecalho">
+    <div>
+      <h1>Inspeção termográfica</h1>
+      <p class="sub">Compara a temperatura máxima entre os módulos de cada imagem e entre leituras únicas do mesmo grupo, e aponta variações acima do limite.</p>
+    </div>
+    <div class="campos">
+      <label class="texto">Subestação / local<input id="local" placeholder="Ex.: SE Salto Santiago"></label>
+      <label class="texto">Responsável<input id="responsavel" placeholder="Nome de quem inspecionou"></label>
+      <label class="limite">Limite módulos (°C)<input id="limite" type="number" min="0.1" step="0.1" value="3"></label>
+      <label class="limite">Limite leitura única (%)<input id="limite-pct" type="number" min="1" step="1" value="50"></label>
+    </div>
+  </div>
+</header>
+
+<main>
+  <label class="soltar" id="soltar" tabindex="0">
+    <input id="arquivo" type="file" accept=".zip,.jpg,.jpeg" multiple hidden>
+    <strong>Arraste o .zip ou as imagens FLIR para cá</strong>
+    <p>Use os JPGs originais da câmera, com as caixas Bx1, Bx2, Bx3 já salvas no FLIR Tools. Tudo é processado neste computador; nenhuma imagem é enviada para a internet.</p>
+    <span class="botao principal">Escolher arquivos</span>
+  </label>
+
+  <div class="progresso" id="progresso" hidden>
+    <span id="progresso-texto">Lendo arquivos…</span>
+    <div class="barra"><span id="progresso-barra"></span></div>
+  </div>
+
+  <section id="resultado" hidden>
+    <div class="acoes">
+      <div class="resumo-texto" id="resumo-texto"></div>
+      <button class="botao" id="btn-excel" type="button">Baixar Excel</button>
+      <button class="botao principal" id="btn-pdf" type="button">Imprimir ou salvar PDF</button>
+      <button class="botao" id="btn-nova" type="button">Nova análise</button>
+    </div>
+    <p class="so-impressao" id="impressao-cab"></p>
+    <div id="falhas" class="falhas" hidden><h2>Arquivos não analisados</h2><ul id="lista-falhas"></ul></div>
+    <div class="tabela-rolagem">
+      <table class="resumo">
+        <thead><tr><th>Imagem</th><th>Equipamento</th><th>Data</th><th class="num">Máx. por caixa (°C)</th><th class="num">Maior diferença</th><th>Status</th></tr></thead>
+        <tbody id="tabela-resumo"></tbody>
+      </table>
+    </div>
+    <div id="bloco-grupos" hidden>
+      <h2 class="titulo-secao">Leituras únicas por grupo</h2>
+      <p class="sub">Imagens com uma só caixa são comparadas entre si dentro do mesmo grupo. Variação = (maior − menor) ÷ menor. Os grupos são sugeridos por horário e GPS; corrija no campo Grupo de cada imagem.</p>
+      <div class="tabela-rolagem">
+        <table><thead><tr><th>Grupo</th><th>Imagens (máx.)</th><th class="num">Maior</th><th class="num">Menor</th><th class="num">Variação</th><th>Status</th></tr></thead><tbody id="tabela-grupos"></tbody></table>
+      </div>
+    </div>
+    <div id="imagens"></div>
+    <p class="rodape">Temperaturas calculadas a partir dos dados radiométricos e dos parâmetros gravados em cada imagem (emissividade, temperatura refletida, distância e umidade). Os valores conferem com o FLIR Tools (diferença de até 0,05 °C).</p>
+  </section>
+</main>
+
+<script>
+/* Núcleo da análise termográfica — mesma lógica do flir_reader.py / flir_core.py.
+   Roda no navegador (e no Node 18+ para testes). Sem dependências externas. */
+const TermoCore = (() => {
+  const TIPOS = {1: 'Spot', 2: 'Area', 3: 'Ellipse', 4: 'Line', 5: 'Endpoint', 6: 'Alarm', 7: 'Unused', 8: 'Difference'};
+
+  // ---------- descompressão nativa do navegador ----------
+  async function inflar(bytes, formato) {
+    const ds = new DecompressionStream(formato);
+    const stream = new Blob([bytes]).stream().pipeThrough(ds);
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  // ---------- leitor de ZIP ----------
+  async function lerZip(buf) {
+    const b = new Uint8Array(buf), dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+    let fim = -1;
+    for (let i = b.length - 22; i >= Math.max(0, b.length - 65557); i--) {
+      if (dv.getUint32(i, true) === 0x06054b50) { fim = i; break; }
+    }
+    if (fim < 0) throw new Error('arquivo ZIP inválido ou corrompido');
+    const n = dv.getUint16(fim + 10, true);
+    let p = dv.getUint32(fim + 16, true);
+    const arquivos = [];
+    for (let i = 0; i < n; i++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      const metodo = dv.getUint16(p + 10, true), comp = dv.getUint32(p + 20, true);
+      const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+      const local = dv.getUint32(p + 42, true);
+      const nome = new TextDecoder(dv.getUint16(p + 8, true) & 0x800 ? 'utf-8' : 'latin1').decode(b.subarray(p + 46, p + 46 + nl));
+      p += 46 + nl + el + cl;
+      if (nome.endsWith('/')) continue;
+      const ini = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
+      const dados = b.subarray(ini, ini + comp);
+      arquivos.push({nome, ler: async () => {
+        if (metodo === 0) return dados.slice();
+        if (metodo === 8) return inflar(dados, 'deflate-raw');
+        throw new Error(`compressão ZIP não suportada (${metodo})`);
+      }});
+    }
+    return arquivos;
+  }
+
+  // ---------- leitor FLIR ----------
+  function segmentosFLIR(b) {
+    if (b[0] !== 0xFF || b[1] !== 0xD8) throw new Error('não é um arquivo JPEG');
+    const partes = {}; let pos = 2;
+    while (pos + 4 <= b.length && b[pos] === 0xFF) {
+      const m = b[pos + 1];
+      if (m === 0xD9 || m === 0xDA) break;
+      const tam = (b[pos + 2] << 8) | b[pos + 3];
+      if (m === 0xE1 && b[pos + 4] === 0x46 && b[pos + 5] === 0x4C && b[pos + 6] === 0x49 && b[pos + 7] === 0x52 && b[pos + 8] === 0) {
+        partes[b[pos + 10]] = b.subarray(pos + 12, pos + 2 + tam);
+      }
+      pos += 2 + tam;
+    }
+    const idx = Object.keys(partes).map(Number).sort((a, c) => a - c);
+    if (!idx.length) throw new Error('JPG sem dados térmicos FLIR (foi comprimido, exportado ou enviado como foto pelo WhatsApp?)');
+    const total = idx.reduce((s, i) => s + partes[i].length, 0);
+    const out = new Uint8Array(total); let o = 0;
+    for (const i of idx) { out.set(partes[i], o); o += partes[i].length; }
+    return out;
+  }
+
+  const le = (b, off = 0) => ((b[off] | (b[off + 1] << 8)) < 0x100); // ordem de bytes do registro
+
+  async function png16(png) {
+    const dv = new DataView(png.buffer, png.byteOffset, png.byteLength);
+    let pos = 8, w = 0, h = 0; const idat = [];
+    while (pos < png.length) {
+      const tam = dv.getUint32(pos), tipo = String.fromCharCode(...png.subarray(pos + 4, pos + 8));
+      const corpo = png.subarray(pos + 8, pos + 8 + tam);
+      if (tipo === 'IHDR') {
+        w = dv.getUint32(pos + 8); h = dv.getUint32(pos + 12);
+        if (corpo[8] !== 16 || corpo[9] !== 0) throw new Error('PNG térmico em formato inesperado');
+      } else if (tipo === 'IDAT') idat.push(corpo);
+      else if (tipo === 'IEND') break;
+      pos += 12 + tam;
+    }
+    const bruto = await inflar(new Blob(idat), 'deflate');
+    const st = w * 2, out = new Uint8Array(h * st);
+    for (let y = 0; y < h; y++) {
+      const f = bruto[y * (st + 1)], li = y * (st + 1) + 1, o = y * st, a0 = o - st;
+      for (let x = 0; x < st; x++) {
+        const raw = bruto[li + x];
+        const a = x >= 2 ? out[o + x - 2] : 0, bb = y ? out[a0 + x] : 0, c = (x >= 2 && y) ? out[a0 + x - 2] : 0;
+        let p = 0;
+        if (f === 1) p = a; else if (f === 2) p = bb; else if (f === 3) p = (a + bb) >> 1;
+        else if (f === 4) { const pa = Math.abs(bb - c), pb = Math.abs(a - c), pc = Math.abs(a + bb - 2 * c); p = (pa <= pb && pa <= pc) ? a : (pb <= pc ? bb : c); }
+        out[o + x] = (raw + p) & 0xFF;
+      }
+    }
+    const raw = new Float64Array(w * h);
+    for (let i = 0; i < w * h; i++) raw[i] = out[2 * i] | (out[2 * i + 1] << 8); // valores little-endian dentro do PNG
+    return {raw, w, h};
+  }
+
+  async function lerFLIR(bytes) {
+    const fff = segmentosFLIR(bytes);
+    const dv = new DataView(fff.buffer, fff.byteOffset, fff.byteLength);
+    if (String.fromCharCode(...fff.subarray(0, 3)) !== 'FFF') throw new Error('bloco FLIR sem cabeçalho FFF');
+    const v = dv.getUint32(0x14, false), E = !(v >= 100 && v < 200); // true = little-endian
+    const dirOff = dv.getUint32(0x18, E), n = dv.getUint32(0x1c, E);
+    const reg = {};
+    for (let i = 0; i < n; i++) {
+      const e = dirOff + i * 0x20, tipo = dv.getUint16(e, E);
+      if (!tipo || reg[tipo]) continue;
+      const off = dv.getUint32(e + 0x0c, E), tam = dv.getUint32(e + 0x10, E);
+      reg[tipo] = fff.subarray(off, off + tam);
+    }
+    if (!reg[0x20] || !reg[0x01]) throw new Error('imagem sem calibração ou sem dados térmicos');
+
+    // CameraInfo
+    const c = reg[0x20], cv = new DataView(c.buffer, c.byteOffset, c.byteLength), cl = le(c);
+    const f32 = o => cv.getFloat32(o, cl);
+    const str = (o, len) => new TextDecoder('latin1').decode(c.subarray(o, o + len)).split('\0')[0].trim();
+    const rh = f32(0x3c);
+    const tUnix = cv.getUint32(0x384, cl), ms = cv.getUint32(0x388, cl) & 0xffff, tz = cv.getInt16(0x38c, cl);
+    const local = new Date((tUnix - tz * 60) * 1000 + ms); // horário local da câmera (ler com getUTC*)
+    const cam = {
+      emissividade: f32(0x20), distancia: f32(0x24),
+      tRefletida: f32(0x28) - 273.15, tAtmosfera: f32(0x2c) - 273.15,
+      tJanela: f32(0x30) - 273.15, transmJanela: f32(0x34), umidade: rh > 2 ? rh / 100 : rh,
+      R1: f32(0x58), B: f32(0x5c), F: f32(0x60),
+      alpha1: f32(0x70), alpha2: f32(0x74), beta1: f32(0x78), beta2: f32(0x7c), X: f32(0x80),
+      O: cv.getInt32(0x308, cl), R2: f32(0x30c),
+      modelo: str(0xd4, 32), serie: str(0x104, 16), lente: str(0x170, 32), data: local,
+    };
+
+    // RawData
+    const r = reg[0x01], rv = new DataView(r.buffer, r.byteOffset, r.byteLength), rl = le(r);
+    let w = rv.getUint16(2, rl), h = rv.getUint16(4, rl), raw;
+    const dados = r.subarray(0x20);
+    if (dados[0] === 0x89 && dados[1] === 0x50) ({raw, w, h} = await png16(dados));
+    else {
+      raw = new Float64Array(w * h);
+      const dd = new DataView(dados.buffer, dados.byteOffset, dados.byteLength);
+      for (let i = 0; i < w * h; i++) raw[i] = dd.getUint16(2 * i, rl);
+    }
+
+    // MeasInfo
+    const medicoes = [];
+    const m = reg[0x21];
+    if (m) {
+      const mv = new DataView(m.buffer, m.byteOffset, m.byteLength), ml = le(m);
+      let pos = 12;
+      while (pos + 2 <= m.length) {
+        const tam = mv.getUint16(pos, ml);
+        if (tam < 0x28 || pos + tam > m.length) break;
+        const nc = mv.getUint16(pos + 4, ml), tipo = mv.getUint16(pos + 0x0a, ml);
+        const params = [];
+        for (let k = 0; k < nc / 2; k++) params.push(mv.getInt16(pos + 0x24 + 2 * k, ml));
+        let rotulo = '';
+        for (let p = pos + 0x24 + nc; p < pos + tam - 1; p += 2) {
+          const ch = mv.getUint16(p, ml);
+          if (ch < 0x20 || ch > 0x7f) break;
+          rotulo += String.fromCharCode(ch);
+        }
+        medicoes.push({tipo: TIPOS[tipo] || String(tipo), params, rotulo});
+        pos += tam;
+      }
+    }
+
+    // GPS (sempre little-endian)
+    let gps = null;
+    const g = reg[0x2b];
+    if (g && g.length >= 0x28) {
+      const gv = new DataView(g.buffer, g.byteOffset, g.byteLength);
+      const lat = gv.getFloat64(0x10, true), lon = gv.getFloat64(0x18, true);
+      if (lat || lon) gps = [String.fromCharCode(g[8]) === 'S' ? -Math.abs(lat) : Math.abs(lat),
+                             String.fromCharCode(g[10]) === 'W' ? -Math.abs(lon) : Math.abs(lon)];
+    }
+    return {cam, raw, w, h, medicoes, gps};
+  }
+
+  function paraCelsius(raw, cam) {
+    const {emissividade: E, distancia: dist, tAtmosfera: ta, tRefletida: tr, tJanela: tw, transmJanela: tauW,
+           R1, R2, B, F, O, X} = cam;
+    const h2o = cam.umidade * Math.exp(1.5587 + 0.06939 * ta - 0.00027816 * ta ** 2 + 0.00000068455 * ta ** 3);
+    const d = Math.sqrt(dist); // um único caminho atmosférico (confere com o FLIR Tools em ±0,05 °C)
+    const tau = X * Math.exp(-d * (cam.alpha1 + cam.beta1 * Math.sqrt(h2o))) +
+                (1 - X) * Math.exp(-d * (cam.alpha2 + cam.beta2 * Math.sqrt(h2o)));
+    const rad = t => R1 / (R2 * (Math.exp(B / (t + 273.15)) - F)) - O;
+    const k = rad(tr) * (1 - E) / E + rad(ta) * (1 - tau) / (E * tau) + rad(tw) * (1 - tauW) / (E * tau * tauW);
+    const div = E * tau * tauW;
+    const t = new Float64Array(raw.length);
+    for (let i = 0; i < raw.length; i++) t[i] = B / Math.log(R1 / (R2 * (raw[i] / div - k + O)) + F) - 273.15;
+    return t;
+  }
+
+  // ---------- análise ----------
+  function percentil(arr, q) {
+    if (!arr.length) return NaN;
+    const s = Float64Array.from(arr).sort(), pos = (s.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
+    return s[lo] + (s[hi] - s[lo]) * (pos - lo);
+  }
+
+  function medirCaixa(t, W, H, c, folga = 6, limiteBorda = 0.02) {
+    const {x, y, w, h} = c, roi = [];
+    const x1 = Math.min(W - 1, x + w), y1 = Math.min(H - 1, y + h);
+    const cols = x1 - x + 1, lins = y1 - y + 1;
+    for (let yy = y; yy <= y1; yy++) for (let xx = x; xx <= x1; xx++) roi.push(t[yy * W + xx]);
+    const lados = [];
+    for (let yy = y; yy <= y1; yy++) {
+      for (let xx = Math.max(0, x - folga - 8); xx < Math.max(0, x - folga); xx++) lados.push(t[yy * W + xx]);
+      for (let xx = Math.min(W, x + w + folga); xx < Math.min(W, x + w + folga + 8); xx++) lados.push(t[yy * W + xx]);
+    }
+    let max = -Infinity, min = Infinity, soma = 0;
+    for (const v of roi) { if (v > max) max = v; if (v < min) min = v; soma += v; }
+    const corpo = percentil(roi, 0.5), fundo = lados.length ? percentil(lados, 0.25) : NaN;
+    let fracFora = 0, colFora = 0, linFora = 0;
+    if (lados.length && corpo - fundo > 1.5) {
+      const corte = fundo + 0.5 * (corpo - fundo);
+      const pc = new Array(cols).fill(0), pl = new Array(lins).fill(0); let tot = 0;
+      roi.forEach((v, i) => { if (v < corte) { tot++; pc[i % cols]++; pl[Math.floor(i / cols)]++; } });
+      fracFora = tot / roi.length;
+      colFora = pc.filter(k => k / lins > 0.5).length;
+      linFora = pl.filter(k => k / cols > 0.5).length;
+    }
+    return {...c, max, min, media: soma / roi.length, pctFora: fracFora * 100, colunasFora: colFora,
+            linhasFora: linFora, dentroModulo: fracFora <= limiteBorda && colFora === 0 && linFora === 0};
+  }
+
+  async function analisar(nome, bytes) {
+    const d = await lerFLIR(bytes);
+    const temp = paraCelsius(d.raw, d.cam);
+    const caixas = d.medicoes.map((m, i) => ({m, i})).filter(({m}) => m.tipo === 'Area')
+      .map(({m, i}) => ({label: m.rotulo || `Bx${i + 1}`, x: m.params[0], y: m.params[1], w: m.params[2], h: m.params[3]}));
+    const medidas = caixas.map(c => medirCaixa(temp, d.w, d.h, c));
+    // Uma caixa só = leitura pontual (conexão, terminal...): a caixa pega o ponto quente e o fundo
+    // ao redor de propósito, então a checagem de "dentro do módulo" não se aplica.
+    const tipo = medidas.length === 1 ? 'pontual' : 'modulos';
+    if (tipo === 'pontual') medidas.forEach(m => { m.dentroModulo = true; m.naoAplica = true; });
+    return {nome, tipo, cam: d.cam, gps: d.gps, w: d.w, h: d.h, temp, medidas, outras: d.medicoes.filter(m => m.tipo !== 'Area')};
+  }
+
+  function comparar(r, limite) {
+    if (r.tipo === 'pontual') return {comps: [], maior: 0, alerta: false, caixaInvalida: false};
+    const comps = [];
+    for (let i = 0; i < r.medidas.length; i++) for (let j = i + 1; j < r.medidas.length; j++) {
+      const a = r.medidas[i], b = r.medidas[j], dt = Math.abs(a.max - b.max);
+      comps.push({par: `${a.label} x ${b.label}`, dtMax: dt, dtMedia: Math.abs(a.media - b.media), alerta: dt > limite});
+    }
+    const maior = comps.reduce((m, c) => Math.max(m, c.dtMax), 0);
+    return {comps, maior, alerta: comps.some(c => c.alerta), caixaInvalida: r.medidas.some(m => !m.dentroModulo)};
+  }
+
+  // ---------- leituras pontuais (uma caixa por imagem) ----------
+  function distanciaM(a, b) {
+    if (!a || !b) return Infinity;
+    const R = 6371000, r = Math.PI / 180, dLat = (b[0] - a[0]) * r, dLon = (b[1] - a[1]) * r;
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+  }
+
+  // Sugere grupos: imagens pontuais em sequência, até 15 min e 50 m da primeira do grupo.
+  function sugerirGrupos(resultados, minutos = 15, metros = 50) {
+    let n = 0, ini = null;
+    for (const r of resultados) {
+      if (r.tipo !== 'pontual') { ini = null; continue; }
+      const mesmo = ini && Math.abs(r.cam.data - ini.cam.data) <= minutos * 60000 &&
+        (distanciaM(r.gps, ini.gps) <= metros || !r.gps || !ini.gps);
+      if (!mesmo) { n++; ini = r; }
+      if (!r.grupo) r.grupo = `Grupo ${n}`;
+    }
+  }
+
+  // Variação % = (maior - menor) / menor, usando a máxima de cada imagem do grupo.
+  function compararGrupos(resultados, limitePct) {
+    const grupos = new Map();
+    for (const r of resultados) if (r.tipo === 'pontual') {
+      const g = (r.grupo || '').trim() || '(sem grupo)';
+      if (!grupos.has(g)) grupos.set(g, []);
+      grupos.get(g).push(r);
+    }
+    const lista = [];
+    for (const [nome, itens] of grupos) {
+      const vals = itens.map(r => r.medidas[0].max);
+      const maior = Math.max(...vals), menor = Math.min(...vals);
+      const quente = itens[vals.indexOf(maior)], frio = itens[vals.indexOf(menor)];
+      let pct = null, situacao;
+      if (itens.length < 2) situacao = 'sem_par';
+      else if (menor <= 0) situacao = 'nao_calculavel';
+      else { pct = (maior - menor) / menor * 100; situacao = pct > limitePct ? 'alerta' : 'ok'; }
+      const g = {nome, itens, maior, menor, quente, frio, pct, dt: maior - menor, situacao};
+      itens.forEach(r => { r.grupoInfo = g; });
+      lista.push(g);
+    }
+    return lista;
+  }
+
+  // ---------- gravador de XLSX (ZIP sem compressão) ----------
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+
+  function zipar(arquivos) {
+    const enc = new TextEncoder(), partes = [], central = []; let off = 0;
+    for (const [nome, conteudo] of arquivos) {
+      const n = enc.encode(nome), d = typeof conteudo === 'string' ? enc.encode(conteudo) : conteudo, crc = crc32(d);
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x800, true);
+      h.setUint32(14, crc, true); h.setUint32(18, d.length, true); h.setUint32(22, d.length, true); h.setUint16(26, n.length, true);
+      partes.push(new Uint8Array(h.buffer), n, d);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x800, true);
+      c.setUint32(16, crc, true); c.setUint32(20, d.length, true); c.setUint32(24, d.length, true); c.setUint16(28, n.length, true);
+      c.setUint32(42, off, true);
+      central.push(new Uint8Array(c.buffer), n);
+      off += 30 + n.length + d.length;
+    }
+    const tamCentral = central.reduce((s, p) => s + p.length, 0);
+    const fim = new DataView(new ArrayBuffer(22));
+    fim.setUint32(0, 0x06054b50, true); fim.setUint16(8, arquivos.length, true); fim.setUint16(10, arquivos.length, true);
+    fim.setUint32(12, tamCentral, true); fim.setUint32(16, off, true);
+    return new Blob([...partes, ...central, new Uint8Array(fim.buffer)], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  }
+
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const colL = n => { let s = ''; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+
+  // linhas: arrays de células: número, texto, {f: 'fórmula', s: estilo} ou {v, s}
+  function planilha(linhas, larguras, congelar) {
+    const cel = (v, ref) => {
+      if (v === null || v === undefined || v === '') return '';
+      let s = 0;
+      if (typeof v === 'object') { s = v.s || 0; if (v.f) return `<c r="${ref}" s="${s}"><f>${esc(v.f)}</f></c>`; v = v.v; }
+      if (typeof v === 'number' && isFinite(v)) return `<c r="${ref}" s="${s}"><v>${v}</v></c>`;
+      return `<c r="${ref}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`;
+    };
+    const rows = linhas.map((l, i) => `<row r="${i + 1}">${l.map((v, j) => cel(v, colL(j) + (i + 1))).join('')}</row>`).join('');
+    const cols = larguras ? `<cols>${larguras.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>` : '';
+    const pane = congelar ? `<sheetViews><sheetView workbookViewId="0"><pane ySplit="${congelar}" topLeftCell="A${congelar + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>` : '';
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${pane}${cols}<sheetData>${rows}</sheetData></worksheet>`;
+  }
+
+  // estilos: 0 normal, 1 cabeçalho, 2 número 0.0, 3 entrada (azul), 4 nota cinza, 5 negrito
+  const ESTILOS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="0.0"/></numFmts>
+<fonts count="5"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font><font><sz val="10"/><color rgb="FF0000FF"/><name val="Arial"/></font><font><i/><sz val="10"/><color rgb="FF808080"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF24313F"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="2" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>
+</styleSheet>`;
+
+  function gerarExcel(todos, limite, cab, limitePct = 50) {
+    const resultados = todos.filter(r => r.tipo !== 'pontual'), pontuais = todos.filter(r => r.tipo === 'pontual');
+    const nCx = Math.max(1, ...resultados.map(r => r.medidas.length));
+    const c1 = colL(3), c2 = colL(2 + nCx), cDt = colL(3 + nCx); // colL é base 0 (0 = A)
+    const resumo = [
+      [{v: 'Limite de diferença (°C)', s: 5}, {v: limite, s: 3}, {v: 'Altere o limite em B1: diferença e status recalculam sozinhos', s: 4}],
+      [{v: 'Subestação', s: 5}, cab.local || '', '', {v: 'Responsável', s: 5}, cab.responsavel || ''],
+      [],
+      ['Imagem', 'Equipamento', 'Data', ...Array.from({length: nCx}, (_, i) => `Bx${i + 1} máx (°C)`), 'Maior diferença (°C)', 'Status', 'Caixas dentro do módulo'].map(v => ({v, s: 1})),
+    ];
+    resultados.forEach((r, k) => {
+      const lin = 5 + k;
+      resumo.push([r.nome, r.equipamento || '', dataBR(r.cam.data),
+        ...Array.from({length: nCx}, (_, i) => r.medidas[i] ? {v: +r.medidas[i].max.toFixed(2), s: 2} : ''),
+        {f: `MAX(${c1}${lin}:${c2}${lin})-MIN(${c1}${lin}:${c2}${lin})`, s: 2},
+        {f: `IF(${cDt}${lin}>$B$1,"ALERTA","OK")`},
+        r.comp.caixaInvalida ? 'NÃO - revisar' : 'Sim']);
+    });
+    // Leituras pontuais: variação do grupo calculada por fórmula (MAXIFS/MINIFS)
+    const pont = [
+      [{v: 'Limite de variação (%)', s: 5}, {v: limitePct, s: 3}, {v: 'Variação = (maior - menor) / menor, entre imagens do mesmo grupo. Altere o limite em B1 ou o grupo na coluna B.', s: 4}],
+      [],
+      ['Imagem', 'Grupo', 'Equipamento', 'Data', 'Máx (°C)', 'Maior do grupo (°C)', 'Menor do grupo (°C)', 'Variação no grupo (%)', 'Status'].map(v => ({v, s: 1})),
+    ];
+    const ultP = 3 + pontuais.length;
+    pontuais.forEach((r, k) => {
+      const l = 4 + k, rg = `$B$4:$B$${ultP}`, rv = `$E$4:$E$${ultP}`;
+      pont.push([r.nome, r.grupo || '', r.equipamento || '', dataBR(r.cam.data), {v: +r.medidas[0].max.toFixed(2), s: 2},
+        {f: `_xlfn.MAXIFS(${rv},${rg},B${l})`, s: 2}, {f: `_xlfn.MINIFS(${rv},${rg},B${l})`, s: 2},
+        {f: `IF(COUNTIF(${rg},B${l})<2,"",IF(G${l}<=0,"",(F${l}-G${l})/G${l}*100))`, s: 2},
+        {f: `IF(COUNTIF(${rg},B${l})<2,"SEM PAR",IF(G${l}<=0,"REVISAR",IF(H${l}>$B$1,"ALERTA","OK")))`}]);
+    });
+    const detalhe = [['Imagem', 'Equipamento', 'Caixa', 'X', 'Y', 'Largura', 'Altura', 'Máx (°C)', 'Mín (°C)', 'Média (°C)', '% pixels fora do módulo', 'Dentro do módulo', 'Emissividade', 'Temp. refletida (°C)', 'Distância (m)', 'Latitude', 'Longitude'].map(v => ({v, s: 1}))];
+    for (const r of todos) for (const m of r.medidas) detalhe.push([r.nome, r.equipamento || '', m.label, m.x, m.y, m.w, m.h,
+      {v: +m.max.toFixed(2), s: 2}, {v: +m.min.toFixed(2), s: 2}, {v: +m.media.toFixed(2), s: 2}, +m.pctFora.toFixed(1),
+      m.naoAplica ? 'Não se aplica' : (m.dentroModulo ? 'Sim' : 'NÃO'), +r.cam.emissividade.toFixed(2), +r.cam.tRefletida.toFixed(1), +r.cam.distancia.toFixed(1),
+      r.gps ? +r.gps[0].toFixed(6) : '', r.gps ? +r.gps[1].toFixed(6) : '']);
+
+    const ct = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+    const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+    const wb = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Módulos" sheetId="1" r:id="rId1"/><sheet name="Leituras únicas" sheetId="3" r:id="rId4"/><sheet name="Detalhe por caixa" sheetId="2" r:id="rId2"/></sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`;
+    const wbr = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/></Relationships>`;
+    return zipar([['[Content_Types].xml', ct], ['_rels/.rels', rels], ['xl/workbook.xml', wb], ['xl/_rels/workbook.xml.rels', wbr],
+      ['xl/styles.xml', ESTILOS],
+      ['xl/worksheets/sheet1.xml', planilha(resumo, [18, 22, 18, ...Array(nCx).fill(13), 16, 10, 20], 4)],
+      ['xl/worksheets/sheet3.xml', planilha(pont, [18, 14, 22, 18, 10, 14, 14, 16, 10], 3)],
+      ['xl/worksheets/sheet2.xml', planilha(detalhe, [16, 20, 8, 6, 6, 8, 8, 10, 10, 10, 12, 10, 11, 12, 11, 12, 12], 1)]]);
+  }
+
+  const p2 = n => String(n).padStart(2, '0');
+  const dataBR = d => `${p2(d.getUTCDate())}/${p2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`;
+
+  return {lerZip, lerFLIR, paraCelsius, medirCaixa, analisar, comparar, sugerirGrupos, compararGrupos, gerarExcel, dataBR};
+})();
+if (typeof module !== 'undefined') module.exports = TermoCore;
+
+</script>
+<script>
+const LUT = (() => { const h = '00000401000501010601010802010a02020c02020e03021004031204031405041706041907051b08051d09061f0a07220b07240c08260d08290e092b10092d110a30120a32140b34150b37160b39180c3c190c3e1b0c411c0c431e0c451f0c48210c4a230c4c240c4f260c51280b53290b552b0b572d0b592f0a5b310a5c320a5e340a5f3609613809623909633b09643d09653e0966400a67420a68440a68450a69470b6a490b6a4a0c6b4c0c6b4d0d6c4f0d6c510e6c520e6d540f6d550f6d57106e59106e5a116e5c126e5d126e5f136e61136e62146e64156e65156e67166e69166e6a176e6c186e6d186e6f196e71196e721a6e741a6e751b6e771c6d781c6d7a1d6d7c1d6d7d1e6d7f1e6c801f6c82206c84206b85216b87216b88226a8a226a8c23698d23698f24699025689225689326679526679727669827669a28659b29649d29649f2a63a02a63a22b62a32c61a52c60a62d60a82e5fa92e5eab2f5ead305dae305cb0315bb1325ab3325ab43359b63458b73557b93556ba3655bc3754bd3853bf3952c03a51c13a50c33b4fc43c4ec63d4dc73e4cc83f4bca404acb4149cc4248ce4347cf4446d04545d24644d34743d44842d54a41d74b3fd84c3ed94d3dda4e3cdb503bdd513ade5238df5337e05536e15635e25734e35933e45a31e55c30e65d2fe75e2ee8602de9612bea632aeb6429eb6628ec6726ed6925ee6a24ef6c23ef6e21f06f20f1711ff1731df2741cf3761bf37819f47918f57b17f57d15f67e14f68013f78212f78410f8850ff8870ef8890cf98b0bf98c0af98e09fa9008fa9207fa9407fb9606fb9706fb9906fb9b06fb9d07fc9f07fca108fca309fca50afca60cfca80dfcaa0ffcac11fcae12fcb014fcb216fcb418fbb61afbb81dfbba1ffbbc21fbbe23fac026fac228fac42afac62df9c72ff9c932f9cb35f8cd37f8cf3af7d13df7d340f6d543f6d746f5d949f5db4cf4dd4ff4df53f4e156f3e35af3e55df2e661f2e865f2ea69f1ec6df1ed71f1ef75f1f179f2f27df2f482f3f586f3f68af4f88ef5f992f6fa96f8fb9af9fc9dfafda1fcffa4', a = new Uint8Array(768); for (let i = 0; i < 768; i++) a[i] = parseInt(h.substr(i * 2, 2), 16); return a; })();
+const $ = id => document.getElementById(id);
+const fmt = (v, c = 1) => v.toLocaleString('pt-BR', {minimumFractionDigits: c, maximumFractionDigits: c});
+const escH = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+let resultados = [], falhas = [];
+
+function lerLimite() { const v = parseFloat(String($('limite').value).replace(',', '.')); return v > 0 ? v : 3; }
+function lerLimitePct() { const v = parseFloat(String($('limite-pct').value).replace(',', '.')); return v > 0 ? v : 50; }
+const SIT = {alerta: ['alerta', 'ALERTA'], ok: ['ok', 'NORMAL'], sem_par: ['revisar', 'SEM PAR'], nao_calculavel: ['revisar', 'REVISAR']};
+
+function status(r) {
+  if (r.tipo === 'pontual') return SIT[r.grupoInfo.situacao];
+  if (r.comp.alerta) return ['alerta', 'ALERTA'];
+  if (r.comp.caixaInvalida) return ['revisar', 'REVISAR CAIXA'];
+  if (r.medidas.length < 2) return ['revisar', 'POUCAS CAIXAS'];
+  return ['ok', 'NORMAL'];
+}
+
+function percentil(t, q) {
+  const n = 4000, passo = Math.max(1, Math.floor(t.length / n)), s = [];
+  for (let i = 0; i < t.length; i += passo) s.push(t[i]);
+  s.sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.floor((s.length - 1) * q))];
+}
+
+function desenhar(canvas, r) {
+  const {w, h, temp} = r;
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const lo = percentil(temp, 0.01), hi = percentil(temp, 0.995), k = 255 / Math.max(0.01, hi - lo);
+  const img = ctx.createImageData(w, h);
+  for (let i = 0; i < temp.length; i++) {
+    const idx = Math.max(0, Math.min(255, Math.round((temp[i] - lo) * k))) * 3;
+    img.data[4 * i] = LUT[idx]; img.data[4 * i + 1] = LUT[idx + 1]; img.data[4 * i + 2] = LUT[idx + 2]; img.data[4 * i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  ctx.font = '600 13px "Segoe UI", system-ui, sans-serif';
+  for (const m of r.medidas) {
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = m.dentroModulo ? '#22d3ee' : '#ff2d55';
+    ctx.strokeRect(m.x + 0.5, m.y + 0.5, m.w, m.h);
+    const txt = `${m.label}  ${fmt(m.max)} °C`, tw = ctx.measureText(txt).width;
+    const tx = Math.min(w - tw - 8, m.x + m.w + 6), ty = Math.max(16, m.y + 14);
+    ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(tx - 4, ty - 13, tw + 8, 18);
+    ctx.fillStyle = '#fff'; ctx.fillText(txt, tx, ty);
+  }
+  return [lo, hi];
+}
+
+function cartao(r, i) {
+  const [cls, rot] = status(r), L = lerLimite();
+  const sec = document.createElement('section');
+  sec.className = 'imagem ' + cls; sec.id = 'img-' + i;
+  const gps = r.gps ? ` · GPS ${r.gps[0].toFixed(5)}, ${r.gps[1].toFixed(5)}` : '';
+  const linhasCx = r.medidas.map(m => `<tr><td>${escH(m.label)}</td><td class="num">${fmt(m.max)}</td><td class="num">${fmt(m.min)}</td><td class="num">${fmt(m.media)}</td><td>${m.naoAplica ? 'Não se aplica' : m.dentroModulo ? 'Sim' : `<span class="vermelho">Não (${fmt(m.pctFora, 0)}% fora)</span>`}</td></tr>`).join('');
+  const linhasCmp = r.comp.comps.map(c => `<tr><td>${escH(c.par)}</td><td class="num">${fmt(c.dtMax)} °C</td><td class="num">${fmt(c.dtMedia)} °C</td><td>${c.alerta ? '<span class="vermelho">Acima do limite</span>' : 'Dentro do limite'}</td></tr>`).join('');
+  let veredito;
+  const g = r.grupoInfo, LP = lerLimitePct();
+  if (r.tipo === 'pontual') {
+    const membros = g.itens.map(x => `${escH(x.equipamento || x.nome)} ${fmt(x.medidas[0].max)} °C`).join(', ');
+    if (g.situacao === 'sem_par') veredito = `<div class="veredito revisar">Leitura única sem outra imagem no mesmo grupo para comparar. Coloque no campo Grupo o mesmo nome das imagens que devem ser comparadas com esta.</div>`;
+    else if (g.situacao === 'nao_calculavel') veredito = `<div class="veredito revisar">A menor leitura do grupo está em 0 °C ou abaixo, e a variação em % não faz sentido. Diferença no grupo: ${fmt(g.dt)} °C.</div>`;
+    else if (g.situacao === 'alerta') veredito = `<div class="veredito alerta"><b>Alerta:</b> variação de ${fmt(g.pct, 0)}% no ${escH(g.nome)}, acima do limite de ${fmt(LP, 0)}% (${membros}). O ponto mais quente é ${escH(g.quente.equipamento || g.quente.nome)} (${fmt(g.maior)} °C); recomenda-se verificar.</div>`;
+    else veredito = `<div class="veredito ok">Variação de ${fmt(g.pct, 0)}% no ${escH(g.nome)}, dentro do limite de ${fmt(LP, 0)}% (${membros}).</div>`;
+  } else if (r.comp.alerta) {
+    const p = r.comp.comps.filter(c => c.alerta).map(c => `${c.par} (${fmt(c.dtMax)} °C)`).join(', ');
+    const quente = r.medidas.reduce((a, b) => a.max >= b.max ? a : b);
+    veredito = `<div class="veredito alerta"><b>Alerta:</b> variação acima de ${fmt(L)} °C entre módulos: ${escH(p)}. O módulo mais quente é o ${escH(quente.label)} (${fmt(quente.max)} °C); recomenda-se verificar.</div>`;
+  } else if (r.medidas.length < 2) {
+    veredito = `<div class="veredito revisar">Esta imagem tem ${r.medidas.length} caixa salva; são necessárias pelo menos duas para comparar módulos.</div>`;
+  } else {
+    veredito = `<div class="veredito ok">Maior diferença entre módulos: ${fmt(r.comp.maior)} °C, dentro do limite de ${fmt(L)} °C.</div>`;
+  }
+  if (r.comp.caixaInvalida) veredito += `<div class="veredito revisar">Uma ou mais caixas incluem pixels do fundo, fora da área do módulo. Reposicione no FLIR Tools para não distorcer a mínima e a média.</div>`;
+
+  sec.innerHTML = `
+    <h2>${escH(r.nome)} <span class="selo ${cls}">${rot}</span>
+      <span class="meta">${escH(r.cam.modelo)} · ${TermoCore.dataBR(r.cam.data)}${gps}</span></h2>
+    <div class="corpo">
+      <div class="termo">
+        <canvas aria-label="Imagem térmica de ${escH(r.nome)} com as caixas de medição"></canvas>
+        <div class="leitura"></div>
+        <div class="escala"><span class="e-min"></span><i></i><span class="e-max"></span></div>
+      </div>
+      <div class="lado">
+        <label>Equipamento / fase<input class="equip" placeholder="Ex.: Para-raios fase A" value="${escH(r.equipamento || '')}"></label>
+        ${r.tipo === 'pontual' ? `<label>Grupo (compara com as imagens de mesmo grupo)<input class="grupo" value="${escH(r.grupo || '')}"></label>` : ''}
+        <table><thead><tr><th>Caixa</th><th class="num">Máx.</th><th class="num">Mín.</th><th class="num">Média</th><th>Dentro do módulo</th></tr></thead><tbody>${linhasCx}</tbody></table>
+        ${linhasCmp ? `<table><thead><tr><th>Comparação</th><th class="num">Dif. máx.</th><th class="num">Dif. média</th><th>Resultado</th></tr></thead><tbody>${linhasCmp}</tbody></table>` : ''}
+        ${veredito}
+        <p class="parametros">Emissividade ${fmt(r.cam.emissividade, 2)} · temp. refletida ${fmt(r.cam.tRefletida)} °C · distância ${fmt(r.cam.distancia, 0)} m · umidade ${fmt(r.cam.umidade * 100, 0)}%</p>
+      </div>
+    </div>`;
+  const cv = sec.querySelector('canvas'), [lo, hi] = desenhar(cv, r);
+  sec.querySelector('.e-min').textContent = fmt(lo) + ' °C';
+  sec.querySelector('.e-max').textContent = fmt(hi) + ' °C';
+  const leitura = sec.querySelector('.leitura');
+  cv.addEventListener('mousemove', ev => {
+    const b = cv.getBoundingClientRect(), x = Math.floor((ev.clientX - b.left) / b.width * r.w), y = Math.floor((ev.clientY - b.top) / b.height * r.h);
+    if (x < 0 || y < 0 || x >= r.w || y >= r.h) return;
+    leitura.style.display = 'block'; leitura.style.left = (ev.clientX - b.left) + 'px'; leitura.style.top = (ev.clientY - b.top) + 'px';
+    leitura.textContent = fmt(r.temp[y * r.w + x]) + ' °C';
+  });
+  cv.addEventListener('mouseleave', () => { leitura.style.display = 'none'; });
+  const gi = sec.querySelector('.grupo');
+  if (gi) gi.addEventListener('change', ev => { r.grupo = ev.target.value; const y = window.scrollY; montar(); window.scrollTo(0, y); });
+  sec.querySelector('.equip').addEventListener('input', ev => {
+    r.equipamento = ev.target.value;
+    const td = document.querySelector(`#tabela-resumo tr[data-i="${i}"] td:nth-child(2)`);
+    if (td) td.textContent = r.equipamento;
+  });
+  sec.querySelector('.equip').addEventListener('change', () => { if (r.tipo === 'pontual') { const y = window.scrollY; montar(); window.scrollTo(0, y); } });
+  return sec;
+}
+
+function montar() {
+  const L = lerLimite();
+  resultados.forEach(r => { r.comp = TermoCore.comparar(r, L); });
+  const grupos = TermoCore.compararGrupos(resultados, lerLimitePct());
+  const st = resultados.map(status);
+  const nAl = st.filter(s => s[0] === 'alerta').length, nRv = st.filter(s => s[0] === 'revisar').length;
+  const total = resultados.length + falhas.length;
+  $('resumo-texto').innerHTML = `<b>${total}</b> ${total === 1 ? 'arquivo recebido' : 'arquivos recebidos'}: ` +
+    `<b>${resultados.length}</b> analisado${resultados.length === 1 ? '' : 's'}, ` +
+    `<b class="${nAl ? 'al' : ''}">${nAl}</b> com alerta, <b class="${nRv ? 'at' : ''}">${nRv}</b> para revisar` +
+    (falhas.length ? `, <b class="at">${falhas.length}</b> não analisado${falhas.length > 1 ? 's' : ''} (veja abaixo)` : '') + '.';
+  $('tabela-resumo').innerHTML = resultados.map((r, i) => {
+    const [cls, rot] = status(r);
+    return `<tr data-i="${i}" tabindex="0"><td>${escH(r.nome)}</td><td>${escH(r.equipamento || '')}</td><td>${TermoCore.dataBR(r.cam.data)}</td>` +
+      `<td class="num">${r.medidas.map(m => fmt(m.max)).join(' / ')}</td><td class="num">${r.tipo === 'pontual' ? (r.grupoInfo.pct !== null ? `${fmt(r.grupoInfo.pct, 0)}% no ${escH(r.grupoInfo.nome)}` : '—') : r.medidas.length > 1 ? fmt(r.comp.maior) + ' °C' : '—'}</td>` +
+      `<td><span class="selo ${cls}">${rot}</span></td></tr>`;
+  }).join('');
+  $('bloco-grupos').hidden = !grupos.length;
+  $('tabela-grupos').innerHTML = grupos.map(g => {
+    const [cls, rot] = SIT[g.situacao];
+    return `<tr><td>${escH(g.nome)}</td><td>${g.itens.map(x => `${escH(x.equipamento || x.nome)}: ${fmt(x.medidas[0].max)}`).join(' · ')}</td>` +
+      `<td class="num">${fmt(g.maior)} °C</td><td class="num">${fmt(g.menor)} °C</td><td class="num">${g.pct !== null ? fmt(g.pct, 0) + '%' : '—'}</td><td><span class="selo ${cls}">${rot}</span></td></tr>`;
+  }).join('');
+  const cont = $('imagens'); cont.innerHTML = '';
+  resultados.forEach((r, i) => cont.appendChild(cartao(r, i)));
+  $('falhas').hidden = !falhas.length;
+  $('lista-falhas').innerHTML = falhas.map(f => `<li><b>${escH(f.nome)}</b>: ${escH(f.motivo)}</li>`).join('');
+  atualizarCabImpressao();
+}
+
+function atualizarCabImpressao() {
+  const p = [];
+  if ($('local').value) p.push('Local: ' + $('local').value);
+  if ($('responsavel').value) p.push('Responsável: ' + $('responsavel').value);
+  p.push('Limite módulos: ' + fmt(lerLimite()) + ' °C', 'Limite leitura única: ' + fmt(lerLimitePct(), 0) + '%', 'Gerado em ' + new Date().toLocaleString('pt-BR'));
+  $('impressao-cab').textContent = p.join(' · ');
+}
+
+async function processar(lista) {
+  const entradas = [];
+  for (const f of lista) {
+    const nome = f.name.toLowerCase();
+    if (nome.endsWith('.zip')) {
+      try {
+        for (const a of await TermoCore.lerZip(await f.arrayBuffer())) {
+          const base = a.nome.split('/').pop();
+          if (/\.jpe?g$/i.test(base) && !base.startsWith('._') && !a.nome.includes('__MACOSX')) entradas.push({nome: base, ler: a.ler});
+        }
+      } catch (e) { falhas.push({nome: f.name, motivo: e.message}); }
+    } else if (/\.jpe?g$/.test(nome)) {
+      entradas.push({nome: f.name, ler: async () => new Uint8Array(await f.arrayBuffer())});
+    } else falhas.push({nome: f.name, motivo: 'tipo de arquivo não suportado (use .zip ou .jpg)'});
+  }
+  if (!entradas.length && !falhas.length) return;
+  $('soltar').hidden = true; $('progresso').hidden = false; $('resultado').hidden = true;
+  entradas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', {numeric: true}));
+  for (let i = 0; i < entradas.length; i++) {
+    $('progresso-texto').textContent = `Analisando ${entradas[i].nome} (${i + 1} de ${entradas.length})…`;
+    $('progresso-barra').style.width = (100 * i / entradas.length) + '%';
+    await new Promise(r => setTimeout(r, 0));
+    try {
+      const r = await TermoCore.analisar(entradas[i].nome, await entradas[i].ler());
+      if (!r.medidas.length) falhas.push({nome: r.nome, motivo: 'nenhuma caixa salva na imagem (posicione e salve no FLIR Tools)'});
+      else resultados.push(r);
+    } catch (e) { falhas.push({nome: entradas[i].nome, motivo: e.message}); }
+  }
+  resultados.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', {numeric: true}));
+  TermoCore.sugerirGrupos(resultados);
+  $('progresso').hidden = true;
+  if (!resultados.length) {
+    $('soltar').hidden = false;
+    alert('Nenhuma imagem pôde ser analisada.\n\n' + falhas.map(f => `${f.nome}: ${f.motivo}`).join('\n'));
+    falhas = [];
+    return;
+  }
+  $('resultado').hidden = false;
+  montar();
+}
+
+const zona = $('soltar');
+$('arquivo').addEventListener('change', e => { processar([...e.target.files]); e.target.value = ''; });
+zona.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('arquivo').click(); } });
+['dragenter', 'dragover'].forEach(t => zona.addEventListener(t, e => { e.preventDefault(); zona.classList.add('ativo'); }));
+['dragleave', 'drop'].forEach(t => zona.addEventListener(t, e => { e.preventDefault(); zona.classList.remove('ativo'); }));
+zona.addEventListener('drop', e => processar([...e.dataTransfer.files]));
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => { e.preventDefault(); if (zona.hidden && e.dataTransfer.files.length) processar([...e.dataTransfer.files]); });
+
+['limite', 'limite-pct'].forEach(id => $(id).addEventListener('change', () => { if (resultados.length) montar(); }));
+['local', 'responsavel'].forEach(id => $(id).addEventListener('input', atualizarCabImpressao));
+$('tabela-resumo').addEventListener('click', e => { const tr = e.target.closest('tr'); if (tr) $('img-' + tr.dataset.i).scrollIntoView({behavior: 'smooth'}); });
+$('tabela-resumo').addEventListener('keydown', e => { const tr = e.target.closest('tr'); if (tr && e.key === 'Enter') $('img-' + tr.dataset.i).scrollIntoView(); });
+$('btn-pdf').addEventListener('click', () => { atualizarCabImpressao(); window.print(); });
+$('btn-nova').addEventListener('click', () => { resultados = []; falhas = []; $('imagens').innerHTML = ''; $('resultado').hidden = true; $('soltar').hidden = false; });
+$('btn-excel').addEventListener('click', () => {
+  const blob = TermoCore.gerarExcel(resultados, lerLimite(), {local: $('local').value, responsavel: $('responsavel').value}, lerLimitePct());
+  const d = new Date(), nome = `inspecao_termografica_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.xlsx`;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+});
+</script>
+</body>
+</html>
